@@ -142,9 +142,30 @@
     return null
   }
 
-  function scrollToText(needle) {
-    const container = getDescriptionContainer()
+  // LinkedIn's collapsed description keeps a layout artifact from the
+  // truncated preview until expanded, which makes highlighting inside a
+  // still-collapsed box render as overlapping/garbled text. Expanding first
+  // avoids that entirely, and matches the "click more, then it scrolls fine"
+  // behavior users hit otherwise.
+  const EXPAND_TOGGLE_TEXT = /^(\.\.\.|…)?\s*(more|see more)\s*$/i
+
+  function expandDescriptionIfCollapsed(container) {
+    const toggle = Array.from(container.querySelectorAll('button, a')).find((el) =>
+      EXPAND_TOGGLE_TEXT.test((el.textContent || '').trim())
+    )
+    if (!toggle) return false
+    toggle.click()
+    return true
+  }
+
+  async function scrollToText(needle) {
+    let container = getDescriptionContainer()
     if (!container || !needle) return false
+
+    if (expandDescriptionIfCollapsed(container)) {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      container = getDescriptionContainer() || container
+    }
 
     const { text, nodes } = buildTextIndex(container)
     const idx = text.toLowerCase().indexOf(needle.trim().toLowerCase())
@@ -203,7 +224,8 @@
     if (message?.type === 'REQUEST_JOB_DATA') {
       sendResponse(extractJobData())
     } else if (message?.type === 'SCROLL_TO_TEXT') {
-      sendResponse({ found: scrollToText(message.text) })
+      scrollToText(message.text).then((found) => sendResponse({ found }))
+      return true // keep the message channel open for the async response
     }
   })
 })()
