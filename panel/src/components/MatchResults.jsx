@@ -1,9 +1,22 @@
+import { useState } from 'react'
 import KeywordChips from './KeywordChips'
 
 export default function MatchResults({ results, onKeywordClick }) {
+  const [copied, setCopied] = useState(false)
+
   if (!results) return null
 
   const { matched, missing, otherTerms, score } = results
+
+  async function handleCopyMissing() {
+    try {
+      await navigator.clipboard.writeText(missing.map((s) => s.term).join(', '))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard permission denied - button just won't confirm.
+    }
+  }
 
   return (
     <div className="panel-section">
@@ -18,7 +31,14 @@ export default function MatchResults({ results, onKeywordClick }) {
         </div>
       )}
 
-      <h3>Missing ({missing.length})</h3>
+      <div className="section-heading">
+        <h3>Missing ({missing.length})</h3>
+        {missing.length > 0 && (
+          <button type="button" className="link-btn" onClick={handleCopyMissing}>
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        )}
+      </div>
       <KeywordChips
         items={missing.map((s) => s.term)}
         variant="missing"
