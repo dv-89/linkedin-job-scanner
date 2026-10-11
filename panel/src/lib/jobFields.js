@@ -43,8 +43,11 @@ function detectClearance(sentences) {
 }
 
 const SPONSOR_MENTION = /\bsponsor(ship|ing|s)?\b/i
-const SPONSOR_NEGATION =
-  /\b(not|unable to|cannot|can't|won't|will not|does not|doesn't|no longer|no)\b/i
+const SPONSOR_NEGATIONS = [
+  /\b(?:unable to|not able to|cannot|can't|won't|will not|does not|doesn't|do not|don't|no longer|not)\s+(?:(?:currently|be able to|provide|offer|support|providing|offering)\s+)*(?:(?:visa|immigration)\s+)?sponsor(?:ship|ing|s)?\b/i,
+  /\bno\s+(?:(?:visa|immigration)\s+)?sponsorship\b/i,
+  /\bsponsorship\s+(?:(?:is|are|will be)\s+)?(?:not\s+(?:available|offered|provided|supported)|unavailable)\b/i,
+]
 const SPONSOR_POSITIVE =
   /\b(will sponsor|able to sponsor|open to sponsor|sponsorship (is |are )?available|do sponsor|happy to sponsor|can sponsor|sponsors? (visas?|candidates?))\b/i
 
@@ -52,7 +55,7 @@ function detectSponsorship(sentences) {
   const sentence = findSentence(sentences, SPONSOR_MENTION)
   if (!sentence) return { status: 'Not mentioned', evidence: null, searchTerm: null }
   const searchTerm = sentence.match(SPONSOR_MENTION)?.[0] ?? 'sponsor'
-  if (SPONSOR_NEGATION.test(sentence)) {
+  if (SPONSOR_NEGATIONS.some((pattern) => pattern.test(sentence))) {
     return { status: 'Not available', evidence: sentence, searchTerm }
   }
   if (SPONSOR_POSITIVE.test(sentence)) {
@@ -68,15 +71,43 @@ const YOE_PATTERNS = [
   /(\d{1,2})\s*years?(?:\s+of)?\s+(?:relevant\s+)?experience/i,
 ]
 
-function detectExpectedYOE(text, sentences) {
-  for (const pattern of YOE_PATTERNS) {
-    const match = text.match(pattern)
-    if (!match) continue
-    const status = match[2]
-      ? `${match[1]}–${match[2]} years`
-      : `${match[1]}+ years`
-    const evidence = sentences.find((s) => s.includes(match[0])) ?? match[0]
-    return { status, evidence, searchTerm: match[0] }
+function detectExpectedYOE(text) {
+  let section = 'other'
+  const candidates = []
+  for (const line of text.split(/\r?\n/)) {
+    if (PREFERRED_HEADING.test(line)) {
+      section = 'preferred'
+      continue
+    }
+    if (NEXT_SECTION_HEADING.test(line)) {
+      section = REQUIRED_HEADING.test(line) ? 'required' : 'other'
+      continue
+    }
+    for (const sentence of splitIntoSentences(line)) {
+      // Choose by position within the sentence, rather than by regex type.
+      const matches = YOE_PATTERNS.map((pattern) => sentence.match(pattern))
+        .filter(Boolean)
+        .sort((a, b) => a.index - b.index || b[0].length - a[0].length)
+      const match = matches[0]
+      if (!match) continue
+      const preferred = section === 'preferred' ||
+        /\b(?:preferred|nice to have|bonus|a plus)\b/i.test(sentence)
+      const required = section === 'required' ||
+        /\b(?:minimum|at least|required|must)\b/i.test(sentence)
+      const priority = preferred ? 2 : required ? 0 : 1
+      candidates.push({
+        priority,
+        status: match[2] ? `${match[1]}–${match[2]} years` : `${match[1]}+ years`,
+        evidence: sentence,
+        searchTerm: match[0],
+      })
+    }
+  }
+  // Stable sorting preserves posting order for equally ranked requirements.
+  candidates.sort((a, b) => a.priority - b.priority)
+  if (candidates.length) {
+    const { status, evidence, searchTerm } = candidates[0]
+    return { status, evidence, searchTerm }
   }
   return { status: 'Not mentioned', evidence: null, searchTerm: null }
 }
@@ -85,6 +116,8 @@ const PREFERRED_HEADING =
   /^\s*(preferred qualifications?|preferred skills?|preferred experience|nice to have|bonus points?)\s*:?\s*$/im
 const NEXT_SECTION_HEADING =
   /^\s*(required qualifications?|requirements?|responsibilities|about (the )?(company|us|role)|what you.?ll (do|need)|minimum qualifications?|qualifications|benefits|compensation|how to apply)\s*:?\s*$/im
+const REQUIRED_HEADING =
+  /^\s*(required qualifications?|requirements?|what you.?ll need|minimum qualifications?|qualifications)\s*:?\s*$/i
 
 const CITIZENSHIP_PATTERNS = [
   /\bu\.?s\.?\s*citizen(ship)?\b/i,
@@ -125,7 +158,7 @@ export function analyzeJobFields(jdText) {
   return {
     clearance: detectClearance(sentences),
     sponsorship: detectSponsorship(sentences),
-    expectedYOE: detectExpectedYOE(text, sentences),
+    expectedYOE: detectExpectedYOE(text),
     preferred: detectPreferred(text, sentences),
   }
 }

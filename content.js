@@ -114,32 +114,52 @@
     document.head.appendChild(style)
   }
 
-  // Concatenates all text nodes under `root` into one string (joined with a
-  // single space at each node boundary so words never accidentally fuse),
-  // tracking each node's start offset - lets us search across nodes split
-  // by inline tags (<strong>, <br>, <li>, ...) and map a match back to a
-  // real DOM Range for highlighting/scrolling.
+  // Collapse rendered whitespace while retaining the DOM offsets for each
+  // character. Inline tags can split a word; only whitespace, line breaks,
+  // and block boundaries should introduce a separator.
   function buildTextIndex(root) {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
-    const nodes = []
+    const walker = document.createTreeWalker(
+      root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT
+    )
+    const positions = []
+    const blockParents = new WeakMap()
     let text = ''
+    let previousBlock = null
+
+    function blockParent(node) {
+      let parent = node.parentElement
+      while (parent && parent !== root) {
+        if (!blockParents.has(parent)) {
+          const display = window.getComputedStyle(parent).display
+          blockParents.set(parent, /^(block|list-item|table|table-row|flex|grid|flow-root)$/.test(display))
+        }
+        if (blockParents.get(parent)) return parent
+        parent = parent.parentElement
+      }
+      return root
+    }
+
+    function append(char, node, offset) {
+      const normalized = /\s/.test(char) ? ' ' : char
+      if (normalized === ' ' && (!text || text.endsWith(' '))) return
+      text += normalized
+      positions.push({ node, offset })
+    }
+
     let node
     while ((node = walker.nextNode())) {
-      nodes.push({ node, start: text.length })
-      text += node.textContent + ' '
-    }
-    return { text, nodes }
-  }
-
-  function locateOffset(nodes, offset) {
-    for (let i = nodes.length - 1; i >= 0; i--) {
-      if (offset >= nodes[i].start) {
-        const within = offset - nodes[i].start
-        const clamped = Math.min(within, nodes[i].node.textContent.length)
-        return { node: nodes[i].node, offset: clamped }
+      if (node.nodeType !== Node.TEXT_NODE) {
+        if (node.tagName === 'BR') append(' ', null, 0)
+        continue
+      }
+      const block = blockParent(node)
+      if (previousBlock && previousBlock !== block) append(' ', null, 0)
+      previousBlock = block
+      for (let i = 0; i < node.textContent.length; i++) {
+        append(node.textContent[i], node, i)
       }
     }
-    return null
+    return { text, positions }
   }
 
   // LinkedIn's collapsed description keeps a layout artifact from the
@@ -167,17 +187,20 @@
       container = getDescriptionContainer() || container
     }
 
-    const { text, nodes } = buildTextIndex(container)
-    const idx = text.toLowerCase().indexOf(needle.trim().toLowerCase())
+    const normalizedNeedle = needle.replace(/\s+/g, ' ').trim()
+    if (!normalizedNeedle) return false
+    const { text, positions } = buildTextIndex(container)
+    const escapedNeedle = normalizedNeedle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const idx = text.search(new RegExp(escapedNeedle, 'i'))
     if (idx === -1) return false
 
-    const start = locateOffset(nodes, idx)
-    const end = locateOffset(nodes, idx + needle.trim().length)
+    const start = positions[idx]
+    const end = positions[idx + normalizedNeedle.length - 1]
     if (!start || !end) return false
 
     const range = document.createRange()
     range.setStart(start.node, start.offset)
-    range.setEnd(end.node, end.offset)
+    range.setEnd(end.node, end.offset + 1)
 
     if (window.CSS?.highlights && typeof Highlight !== 'undefined') {
       CSS.highlights.set(HIGHLIGHT_NAME, new Highlight(range))

@@ -6,10 +6,9 @@ import JobFields from './components/JobFields'
 import { extractTextFromPdf } from './lib/extractText'
 import { matchKeywords } from './lib/keywordMatch'
 import { analyzeJobFields } from './lib/jobFields'
+import { subscribeToActiveJob } from './lib/activeJob'
 import { getResume, setResume as saveResume, clearResume } from './lib/storage'
 import './App.css'
-
-const LINKEDIN_JOB_URL = /^https:\/\/www\.linkedin\.com\/jobs\//
 
 function App() {
   const [resume, setResumeState] = useState(null)
@@ -25,45 +24,10 @@ function App() {
   }, [])
 
   useEffect(() => {
-    async function syncActiveTab() {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      })
-      if (!tab?.url || !LINKEDIN_JOB_URL.test(tab.url)) {
-        setIsLinkedInJobPage(false)
-        setJobData(null)
-        return
-      }
-      setIsLinkedInJobPage(true)
-      try {
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          type: 'REQUEST_JOB_DATA',
-        })
-        if (response) setJobData(response)
-      } catch {
-        // Content script may not be injected yet; it will push JOB_DATA
-        // once ready.
-      }
-    }
-
-    function handleMessage(message) {
-      if (message?.type === 'JOB_DATA') {
-        setJobData(message)
-        setIsLinkedInJobPage(true)
-      }
-    }
-
-    syncActiveTab()
-    chrome.tabs.onActivated.addListener(syncActiveTab)
-    chrome.tabs.onUpdated.addListener(syncActiveTab)
-    chrome.runtime.onMessage.addListener(handleMessage)
-
-    return () => {
-      chrome.tabs.onActivated.removeListener(syncActiveTab)
-      chrome.tabs.onUpdated.removeListener(syncActiveTab)
-      chrome.runtime.onMessage.removeListener(handleMessage)
-    }
+    return subscribeToActiveJob(chrome, ({ isLinkedInJobPage, jobData }) => {
+      setIsLinkedInJobPage(isLinkedInJobPage)
+      setJobData(jobData)
+    })
   }, [])
 
   async function handleFileSelected(file) {

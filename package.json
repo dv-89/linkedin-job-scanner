@@ -5,6 +5,8 @@
   "description": "Chrome extension that compares your resume against the LinkedIn job posting you're viewing.",
   "scripts": {
     "build": "npm --prefix panel run build",
-    "dev": "npm --prefix panel run dev"
+    "dev": "npm --prefix panel run dev",
+    "lint": "npm --prefix panel run lint",
+    "test": "node --test tests/*.test.mjs"
   }
 }

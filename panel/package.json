@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "oxlint",
+    "lint": "cd .. && oxlint panel/src panel/vite.config.js content.js background.js tests",
     "preview": "vite preview"
   },
   "dependencies": {
