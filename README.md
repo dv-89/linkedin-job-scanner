@@ -36,6 +36,7 @@ npm run build   # builds panel/dist (required before loading the extension)
 npm run dev     # runs the panel in a browser tab for UI iteration
 npm test        # runs the regression tests (Node.js test runner)
 npm run lint    # checks application and test source
+npm run package # builds the upload ZIP in releases/ (Windows)
 ```
 
 ## Load the extension locally

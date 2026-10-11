@@ -26,6 +26,10 @@ export default function ResumeStatus({
           <span>Upload your resume (PDF)</span>
         </label>
       )}
+      <p className="hint">
+        Resume text stays in this browser and is never uploaded.
+        {resume ? ' Change removes the saved text.' : ' Upload a PDF to save it locally for matching.'}
+      </p>
       {isExtracting && <p className="hint">Reading resume…</p>}
       {error && <p className="error">{error}</p>}
     </div>

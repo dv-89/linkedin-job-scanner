@@ -105,6 +105,13 @@ function App() {
       <MatchResults results={results} onKeywordClick={handleLocate} />
       <JobFields fields={fields} onLocate={handleLocate} />
 
+      <footer className="privacy-footer">
+        <a href={chrome.runtime.getURL('privacy.html')} target="_blank" rel="noreferrer">
+          Privacy policy
+        </a>
+        <p>Independent tool. Not affiliated with LinkedIn.</p>
+      </footer>
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
