@@ -2,7 +2,7 @@
 
 ## Prepared files
 
-- Upload ZIP: releases/linkedin-job-scanner-0.1.0.zip (generated; not committed).
+- Upload ZIP: releases/linkedin-job-scanner-0.1.1.zip (generated; not committed).
 - Extension and store icon: icons/icon-128.png.
 - Small promotional tile: store/promo-440x280.png.
 - Listing copy, purpose, permission explanations, privacy facts, and test instructions: store/LISTING.md.
@@ -36,6 +36,16 @@ Load the ZIP's contents as an unpacked extension in a clean Chrome profile and p
 4. Enter reviewer test instructions. LinkedIn access may require the reviewer to sign in to LinkedIn; no separate extension credentials exist.
 5. Select Public visibility, Free pricing, and your distribution regions.
 6. Resolve the dashboard's outstanding fields and validation messages, then submit for review. Google reviews the extension before it becomes available. Choose whether to publish automatically after approval or defer publication.
+
+## Updating an existing listing
+
+1. Increment manifest.json's version and keep the root package.json version in sync.
+2. Run `npm run package` and test the generated package locally.
+3. Open the existing item in the Developer Dashboard, then select Package > Upload New Package and upload the new version's ZIP from releases/.
+4. Update listing copy and screenshots as needed, using LISTING.md for the current features and reviewer instructions.
+5. Submit for review and choose automatic or deferred publication. If the previous submission is still awaiting review, cancel that review before replacing the package.
+
+The ZIP and built panel are generated locally and excluded from Git. Pushing source to GitHub does not publish the Chrome Web Store update.
 
 ## Official references
 

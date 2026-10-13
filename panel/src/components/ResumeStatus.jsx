@@ -4,6 +4,7 @@ export default function ResumeStatus({
   error,
   onFileSelected,
   onClear,
+  disabled = false,
 }) {
   return (
     <div className="resume-status">
@@ -12,7 +13,7 @@ export default function ResumeStatus({
           <span className="resume-name" title={resume.fileName}>
             📄 {resume.fileName}
           </span>
-          <button type="button" className="link-btn" onClick={onClear}>
+          <button type="button" className="link-btn" onClick={onClear} disabled={disabled || isExtracting}>
             Change
           </button>
         </div>
@@ -21,7 +22,11 @@ export default function ResumeStatus({
           <input
             type="file"
             accept="application/pdf"
-            onChange={(e) => onFileSelected(e.target.files?.[0] ?? null)}
+            disabled={disabled || isExtracting}
+            onChange={(e) => {
+              onFileSelected(e.target.files?.[0] ?? null)
+              e.target.value = ''
+            }}
           />
           <span>Upload your resume (PDF)</span>
         </label>

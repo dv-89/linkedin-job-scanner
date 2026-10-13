@@ -247,3 +247,157 @@ header {
 .privacy-footer a {
   color: var(--accent);
 }
+
+.resume-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.resume-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resume-tab.active {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.tab-label {
+  color: var(--text-h);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tab-filename {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.tab-score {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.resume-tab.best-match {
+  background: rgba(34, 197, 94, 0.09);
+  border-color: #16803c;
+}
+
+.best-match .tab-score,
+.best-label {
+  color: #16803c;
+}
+
+.best-label {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.layout-hint {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.resume-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reorderable-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.section-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-toolbar h2 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.section-move-controls {
+  display: flex;
+  gap: 4px;
+}
+
+.section-move-controls button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.reorderable-section > .panel-section,
+.reorderable-section > .resume-status {
+  border: 0;
+  border-radius: 0;
+}
+
+.file-input {
+  flex-wrap: wrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .best-match .tab-score,
+  .best-label {
+    color: #4ade80;
+  }
+
+  .resume-tab.best-match {
+    border-color: #4ade80;
+  }
+}

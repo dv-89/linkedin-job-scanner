@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn Job Scanner",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minimum_chrome_version": "140",
   "description": "Compares your resume against the LinkedIn job posting you're viewing: keyword matches, clearance/sponsorship/YOE detection.",
   "icons": {

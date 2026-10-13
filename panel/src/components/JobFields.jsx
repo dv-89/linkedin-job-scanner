@@ -42,7 +42,6 @@ export default function JobFields({ fields, onLocate }) {
 
   return (
     <div className="panel-section">
-      <h3>Job details</h3>
       <FieldRow
         label="Clearance"
         status={clearance.status}

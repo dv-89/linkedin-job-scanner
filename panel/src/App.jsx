@@ -3,25 +3,49 @@ import ResumeStatus from './components/ResumeStatus'
 import JobHeader from './components/JobHeader'
 import MatchResults from './components/MatchResults'
 import JobFields from './components/JobFields'
+import ResumeTabs from './components/ResumeTabs'
+import ReorderableSection from './components/ReorderableSection'
 import { extractTextFromPdf } from './lib/extractText'
 import { matchKeywords } from './lib/keywordMatch'
 import { analyzeJobFields } from './lib/jobFields'
 import { subscribeToActiveJob } from './lib/activeJob'
-import { getResume, setResume as saveResume, clearResume } from './lib/storage'
+import { RESUME_SLOTS, DEFAULT_SECTION_ORDER, getPanelState, setResume as saveResume, clearResume, setSectionOrder as saveSectionOrder } from './lib/storage'
 import './App.css'
 
+const SECTION_TITLES = {
+  details: 'Job details', resume: 'Resume', job: 'Title & company', keywords: 'Skills & keywords',
+}
+const FEATURE_REQUEST_URL = `mailto:dvardhan89@gmail.com?subject=${encodeURIComponent('Job Scanner feature request')}&body=${encodeURIComponent('Feature I would like:\n\nHow it would help:\n\n')}`
+
 function App() {
-  const [resume, setResumeState] = useState(null)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [resumeError, setResumeError] = useState(null)
+  const [resumes, setResumes] = useState([null, null, null])
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [busySlots, setBusySlots] = useState({})
+  const [resumeErrors, setResumeErrors] = useState({})
+  const [sectionOrder, setSectionOrder] = useState(DEFAULT_SECTION_ORDER)
+  const [isSavingOrder, setIsSavingOrder] = useState(false)
+  const [layoutMessage, setLayoutMessage] = useState('')
+  const [loadStatus, setLoadStatus] = useState('loading')
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  const resume = resumes[activeIndex]
+  const activeSlot = RESUME_SLOTS[activeIndex]
 
   const [isLinkedInJobPage, setIsLinkedInJobPage] = useState(false)
   const [jobData, setJobData] = useState(null)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
-    getResume().then(setResumeState)
-  }, [])
+    let cancelled = false
+    getPanelState().then((saved) => {
+      if (cancelled) return
+      setResumes(saved.resumes)
+      setSectionOrder(saved.sectionOrder)
+      setLoadStatus('ready')
+    }).catch(() => {
+      if (!cancelled) setLoadStatus('error')
+    })
+    return () => { cancelled = true }
+  }, [loadAttempt])
 
   useEffect(() => {
     return subscribeToActiveJob(chrome, ({ isLinkedInJobPage, jobData }) => {
@@ -31,24 +55,56 @@ function App() {
   }, [])
 
   async function handleFileSelected(file) {
-    if (!file) return
-    setResumeError(null)
-    setIsExtracting(true)
+    if (!file || loadStatus !== 'ready' || busySlots[activeSlot]) return
+    const slot = activeSlot
+    const index = activeIndex
+    setResumeErrors((errors) => ({ ...errors, [slot]: null }))
+    setBusySlots((busy) => ({ ...busy, [slot]: true }))
     try {
       const text = await extractTextFromPdf(file)
       const next = { fileName: file.name, text }
-      await saveResume(next)
-      setResumeState(next)
+      await saveResume(slot, next)
+      setResumes((current) => current.map((item, i) => i === index ? next : item))
     } catch {
-      setResumeError('Could not read that PDF. Try a different file.')
+      setResumeErrors((errors) => ({ ...errors, [slot]: 'Could not read or save that PDF. Try again or choose a different file.' }))
     } finally {
-      setIsExtracting(false)
+      setBusySlots((busy) => ({ ...busy, [slot]: false }))
     }
   }
 
   async function handleClearResume() {
-    await clearResume()
-    setResumeState(null)
+    if (loadStatus !== 'ready' || busySlots[activeSlot]) return
+    const slot = activeSlot
+    const index = activeIndex
+    setResumeErrors((errors) => ({ ...errors, [slot]: null }))
+    setBusySlots((busy) => ({ ...busy, [slot]: true }))
+    try {
+      await clearResume(slot)
+      setResumes((current) => current.map((item, i) => i === index ? null : item))
+    } catch {
+      setResumeErrors((errors) => ({ ...errors, [slot]: 'Could not remove the saved resume. Try again.' }))
+    } finally {
+      setBusySlots((busy) => ({ ...busy, [slot]: false }))
+    }
+  }
+
+  async function handleMoveSection(id, direction) {
+    if (loadStatus !== 'ready' || isSavingOrder) return
+    const index = sectionOrder.indexOf(id)
+    const target = index + direction
+    if (index < 0 || target < 0 || target >= sectionOrder.length) return
+    const next = [...sectionOrder]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setIsSavingOrder(true)
+    try {
+      await saveSectionOrder(next)
+      setSectionOrder(next)
+      setLayoutMessage(`${SECTION_TITLES[id]} moved ${direction < 0 ? 'up' : 'down'}. Layout saved for all tabs.`)
+    } catch {
+      setLayoutMessage('Could not save the layout. Try again.')
+    } finally {
+      setIsSavingOrder(false)
+    }
   }
 
   async function handleLocate(searchTerm) {
@@ -70,15 +126,37 @@ function App() {
     }
   }
 
-  const results = useMemo(() => {
-    if (!resume?.text || !jobData?.descriptionText) return null
-    return matchKeywords(jobData.descriptionText, resume.text)
-  }, [resume, jobData])
+  const allResults = useMemo(() => resumes.map((item) => {
+    if (!item?.text || !jobData?.descriptionText) return null
+    return matchKeywords(jobData.descriptionText, item.text)
+  }), [resumes, jobData])
+  const results = allResults[activeIndex]
 
   const fields = useMemo(() => {
     if (!jobData?.descriptionText) return null
     return analyzeJobFields(jobData.descriptionText)
   }, [jobData])
+
+  const sections = {
+    resume: <ResumeStatus
+      key={activeSlot}
+      resume={resume}
+      isExtracting={Boolean(busySlots[activeSlot])}
+      error={resumeErrors[activeSlot]}
+      disabled={loadStatus !== 'ready'}
+      onFileSelected={handleFileSelected}
+      onClear={handleClearResume}
+    />,
+    job: <JobHeader isLinkedInJobPage={isLinkedInJobPage} jobData={jobData} />,
+    keywords: results ? <MatchResults key={activeSlot} results={results} onKeywordClick={handleLocate} /> : (
+      <div className="panel-section placeholder">
+        <p>{!resume ? 'Upload a PDF in this tab’s Resume section to see keyword matches.' : 'Open a LinkedIn job posting to see keyword matches.'}</p>
+      </div>
+    ),
+    details: fields ? <JobFields fields={fields} onLocate={handleLocate} /> : (
+      <div className="panel-section placeholder"><p>Clearance, sponsorship, experience and preferred qualifications appear here when a job is loaded.</p></div>
+    ),
+  }
 
   return (
     <div className="app">
@@ -86,26 +164,40 @@ function App() {
         <h1>Job Scanner</h1>
       </header>
 
-      <ResumeStatus
-        resume={resume}
-        isExtracting={isExtracting}
-        error={resumeError}
-        onFileSelected={handleFileSelected}
-        onClear={handleClearResume}
+      <ResumeTabs
+        resumes={resumes}
+        results={allResults}
+        activeIndex={activeIndex}
+        onSelect={setActiveIndex}
       />
 
-      <JobHeader isLinkedInJobPage={isLinkedInJobPage} jobData={jobData} />
-
-      {isLinkedInJobPage && jobData?.descriptionText && !resume && (
-        <div className="panel-section placeholder">
-          <p>Upload your resume above to see keyword matches.</p>
+      {loadStatus === 'loading' && <p className="hint" role="status">Loading saved resumes and layout…</p>}
+      {loadStatus === 'error' && (
+        <div className="error" role="alert">
+          Could not load saved resumes and layout.{' '}
+          <button type="button" className="link-btn" onClick={() => {
+            setLoadStatus('loading')
+            setLoadAttempt((attempt) => attempt + 1)
+          }}>Retry</button>
         </div>
       )}
 
-      <MatchResults results={results} onKeywordClick={handleLocate} />
-      <JobFields fields={fields} onLocate={handleLocate} />
+      <p className="layout-hint">Use ↑ ↓ to reorder sections. Layout is shared across all three tabs and saved in this browser.</p>
+      <div className="sr-only" role="status">{layoutMessage}</div>
+      {layoutMessage.startsWith('Could not') && <p className="error">{layoutMessage}</p>}
+      <div className="resume-panel" id="resume-panel" role="tabpanel" aria-labelledby={`resume-tab-${activeIndex}`}>
+        {sectionOrder.map((id, index) => (
+          <ReorderableSection key={id} id={id} title={SECTION_TITLES[id]}
+            index={index} count={sectionOrder.length}
+            disabled={loadStatus !== 'ready' || isSavingOrder} onMove={handleMoveSection}>
+            {sections[id]}
+          </ReorderableSection>
+        ))}
+      </div>
 
       <footer className="privacy-footer">
+        <a className="feature-request" href={FEATURE_REQUEST_URL}>Request a feature</a>
+        <span aria-hidden="true"> · </span>
         <a href={chrome.runtime.getURL('privacy.html')} target="_blank" rel="noreferrer">
           Privacy policy
         </a>

@@ -1,12 +1,20 @@
 # LinkedIn Job Scanner
 
 Chrome extension that compares your resume against the LinkedIn job posting
-you're currently viewing. Upload a resume once; as you browse job postings,
+you're currently viewing. Save up to three resumes; as you browse job postings,
 the side panel shows keyword overlap plus a few fields that are usually
 buried in free-text descriptions.
 
 ## Features
 
+- **Three resume tabs** — each keeps its own PDF locally and shows its match
+  percentage for the current job. The highest score is highlighted in green;
+  ties highlight every top-scoring resume.
+- **Saved section order** — use the up/down buttons to move Resume, Title &
+  company, Skills & keywords, and Job details. One layout is shared across all
+  tabs and persists when the panel reopens. Job details starts first so clearance
+  and sponsorship are easy to check. An existing saved resume migrates to tab 1.
+- **Request a feature** — opens an email draft to dvardhan89@gmail.com.
 - **Keyword matching** — highlights which resume keywords appear in the job
   description, and which required skills are missing.
 - **Field detection** (regex-based, no AI) for:

@@ -15,11 +15,14 @@ Compare your resume with the LinkedIn job posting you are viewing, without sendi
 Upload a text-based PDF resume, open a LinkedIn job posting, and click the extension icon to open Job Scanner in Chrome's side panel.
 
 Features:
+- Save up to three PDF resumes in separate tabs, compare their match percentages, and see the highest match highlighted in green.
+- Move Resume, Title & company, Skills & keywords, and Job details with up/down buttons. The layout is shared across tabs and saved locally; Job details starts at the top.
 - See which keywords from a curated skills dictionary appear in both your resume and the posting.
 - Review missing keywords and copy the list.
 - Detect mentions of security clearance, visa sponsorship, expected years of experience, and preferred qualifications.
 - View the source evidence and click a detected field or keyword to scroll to it in the posting.
 - Follow the active job tab as you browse postings.
+- Request a feature by opening an email draft to dvardhan89@gmail.com.
 
 Your resume text stays in local browser storage. Job analysis runs on your device. No account with this extension, AI service, subscription, or API key is required. Click Change to remove the saved resume text.
 
@@ -33,7 +36,7 @@ Compare a user-selected PDF resume with the LinkedIn job posting being viewed, s
 
 ## Permission justifications
 
-storage: Saves the user-selected resume's filename and extracted text locally so it can be reused across job postings. Change deletes this local data. No Chrome Sync storage is used.
+storage: Saves up to three user-selected resumes' filenames and extracted text locally so they can be reused across job postings, plus the shared section order. Change deletes the selected tab's resume data. No Chrome Sync storage is used.
 
 sidePanel: Displays the resume upload, keyword analysis, and job-requirement evidence beside the LinkedIn posting.
 
@@ -67,3 +70,6 @@ Publisher name and support email: not chosen yet; set these in your developer ac
 5. Review detected job fields and click Show evidence or the field's status to locate the supporting phrase when present.
 6. Switch to a different job tab; confirm the panel follows that tab. Switch to a non-LinkedIn tab; confirm the prompt to open a job posting appears.
 7. Click Change; confirm the resume is removed and the upload control returns. Reopen the panel to confirm the deleted resume is not restored.
+8. Upload different synthetic resumes in all three tabs. Confirm each tab keeps its own resume and score, with the highest score highlighted (including ties). Changing one resume leaves the other two intact.
+9. Move a section with the up/down controls, switch resume tabs, and reopen the panel. Confirm the section order is shared across tabs and preserved.
+10. Confirm Request a feature links to an email draft addressed to dvardhan89@gmail.com; no test email needs to be sent.
