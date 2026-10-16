@@ -7,7 +7,7 @@ export default function JobHeader({ isLinkedInJobPage, jobData }) {
     )
   }
 
-  if (!jobData || !jobData.descriptionText) {
+  if (!jobData) {
     return (
       <div className="panel-section placeholder">
         <p>Reading job posting…</p>
@@ -19,6 +19,8 @@ export default function JobHeader({ isLinkedInJobPage, jobData }) {
     <div className="panel-section job-header">
       <h2>{jobData.title || 'Job posting'}</h2>
       {jobData.company && <p className="company">{jobData.company}</p>}
+      {jobData.location && <p className="location">{jobData.location}</p>}
+      {!jobData.descriptionText && <p className="hint">Waiting for the job description to load…</p>}
     </div>
   )
 }

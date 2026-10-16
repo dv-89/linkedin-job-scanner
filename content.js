@@ -10,9 +10,13 @@
 //     with the text itself in a nested [data-testid="expandable-text-box"]
 //   - there is no <h1> anywhere on the page; document.title follows the
 //     reliable "<Job Title> | <Company> | LinkedIn" format instead
-// Heading-text search and "biggest text block" remain as fallbacks in case
+// Alternate description containers and heading-text search are fallbacks if
 // a different page layout (e.g. logged-out view) doesn't match the above.
 ;(function () {
+  // Reconnection can race with Chrome's static injection. Retire the previous
+  // instance so there is only one observer, Apply listener and message handler.
+  globalThis.__jobScannerDispose?.()
+  const isJobsPage = () => location.href.startsWith('https://www.linkedin.com/jobs/')
   const DESCRIPTION_HEADINGS = [
     'about the job',
     'about this job',
@@ -21,13 +25,35 @@
     'the role',
   ]
 
+  function currentJobId() {
+    return location.href.match(/[?&]currentJobId=(\d+)/)?.[1] ||
+      location.href.match(/\/jobs\/view\/(\d+)/)?.[1]
+  }
+
+  function findModernDescriptionSection() {
+    const jobId = currentJobId()
+    if (jobId) return document.querySelector(`[id="JobDetails_AboutTheJob_${jobId}"]`)
+    return document.querySelector('[id^="JobDetails_AboutTheJob_"]')
+  }
+
   // Verified against a real saved LinkedIn job page (search-results layout).
   function findDescriptionByKnownContainer() {
-    const section = document.querySelector('[id^="JobDetails_AboutTheJob_"]')
-    if (!section) return null
-    const textBox = section.querySelector('[data-testid="expandable-text-box"]')
-    const el = textBox || section
-    return el.innerText && el.innerText.trim().length > 0 ? el : null
+    const section = findModernDescriptionSection()
+    if (section) {
+      const textBox = section.querySelector('[data-testid="expandable-text-box"]')
+      const el = textBox || section
+      if (el.innerText?.trim()) return el
+    }
+    for (const selector of [
+      '[data-sdui-component="com.linkedin.sdui.generated.jobseeker.dsl.impl.aboutTheJob"]',
+      '.jobs-description-content__text',
+      '.jobs-description__content',
+      '.description__text .show-more-less-html__markup',
+    ]) {
+      const el = document.querySelector(selector)
+      if (el?.innerText?.trim()) return el
+    }
+    return null
   }
 
   // Text-anchor heuristic: find an element whose own text is exactly a
@@ -41,30 +67,19 @@
       // innerText (forces a reflow) on the much smaller candidate set.
       const raw = (el.textContent || '').trim().toLowerCase()
       if (raw.length > 40 || !DESCRIPTION_HEADINGS.includes(raw)) continue
-      const container = el.closest('section') || el.parentElement
-      if (!container) continue
-      const text = (container.innerText || '').trim()
-      if (text.length > 150) return container
-    }
-    return null
-  }
-
-  // Last-resort fallback: the leaf-ish element (no nested div/section/
-  // article) with the most text inside <main>. Job descriptions tend to be
-  // long, relatively flat text blocks, unlike nav/list chrome around them.
-  function findLargestTextBlock() {
-    const root = document.querySelector('main') || document.body
-    let best = null
-    let bestLength = 0
-    for (const el of root.querySelectorAll('div, section, article')) {
-      if (el.querySelector('div, section, article')) continue
-      const len = (el.innerText || '').trim().length
-      if (len > bestLength) {
-        bestLength = len
-        best = el
+      // Display-contents wrappers often hold only the heading. Walk a few
+      // parents to reach its sibling description, stopping before page chrome.
+      let container = el.parentElement
+      for (let depth = 0; container && depth < 5; depth++, container = container.parentElement) {
+        if (/^(MAIN|BODY|HTML|NAV|HEADER|FOOTER)$/.test(container.tagName)) break
+        const textBox = container.querySelector('[data-testid="expandable-text-box"]')
+        if (textBox?.innerText?.trim()) return textBox
+        const text = (container.innerText || '').trim()
+        if (text.length > 150) return container
+        if (container.tagName === 'SECTION') break
       }
     }
-    return bestLength > 200 ? best : null
+    return null
   }
 
   // LinkedIn sets document.title to "<Job Title> | <Company> | LinkedIn".
@@ -80,27 +95,75 @@
     }
   }
 
+  function readLocationParagraph(paragraph) {
+    const [place, ...metadata] = (paragraph.innerText || paragraph.textContent || '').split('·')
+    if (!metadata.some((part) => /\b(ago|posted|reposted|applicants?|clicked apply)\b/i.test(part))) return null
+    return place.replace(/\s+/g, ' ').trim() || null
+  }
+
+  function fromJobHeader(fallback) {
+    const jobId = currentJobId()
+    let partial = null
+    for (const link of document.querySelectorAll('a[href*="/jobs/view/"]')) {
+      const linkTitle = (link.textContent || '').replace(/\s+/g, ' ').trim()
+      if (!linkTitle) continue
+      const href = link.getAttribute?.('href') || link.href || ''
+      const linkId = href.match(/\/jobs\/view\/(\d+)(?:[/?#]|$)/)?.[1]
+      // On search pages document.title can still say "Jobs | LinkedIn" or
+      // name the previously selected posting. Use the current job ID first.
+      const matchesJob = jobId && linkId ? linkId === jobId : linkTitle === fallback.title
+      if (!matchesJob) continue
+      let header = link.parentElement
+      for (let depth = 0; header && depth < 6; depth++, header = header.parentElement) {
+        if (/^(MAIN|BODY|HTML)$/.test(header.tagName)) break
+        // Logo-only company anchors can come before the named company link.
+        const companyText = Array.from(header.querySelectorAll('a[href*="/company/"]'))
+          .map((el) => (el.textContent || '').replace(/\s+/g, ' ').trim()).find(Boolean)
+        const company = companyText || fallback.company
+        if (!partial || companyText) partial = { title: linkTitle, company }
+        for (const paragraph of header.querySelectorAll('p')) {
+          const place = readLocationParagraph(paragraph)
+          if (place) return { title: linkTitle, company, location: place }
+        }
+      }
+    }
+    return partial || fallback
+  }
+
+  function findLegacyLocation() {
+    // Older detail and public-page layouts expose a dedicated location field.
+    const locationEl = document.querySelector(
+      '.job-details-jobs-unified-top-card__primary-description-container .tvm__text--low-emphasis, ' +
+      '.jobs-unified-top-card__bullet, .topcard__flavor--bullet'
+    )
+    const locationText = locationEl?.innerText?.replace(/\s+/g, ' ').trim()
+    return locationText || null
+  }
+
   function getDescriptionContainer() {
+    if (!isJobsPage()) return null
     return (
       findDescriptionByKnownContainer() ||
-      findDescriptionByHeading() ||
-      findLargestTextBlock()
+      findDescriptionByHeading()
     )
   }
 
   function extractJobData() {
-    const { title, company } = fromDocumentTitle()
+    if (!isJobsPage()) return { type: 'JOB_DATA', url: location.href, title: null, company: null,
+      location: null, jobId: null, descriptionText: '' }
+    const header = fromJobHeader(fromDocumentTitle())
 
     const descEl = getDescriptionContainer()
-    if (!descEl) {
-      console.warn('[JobScanner] could not find job description container')
-    }
+    // A missing description is expected during SPA navigation/hydration.
+    // Report an empty loading state and let the observer retry when it arrives.
 
     return {
       type: 'JOB_DATA',
       url: location.href,
-      title,
-      company,
+      title: header.title,
+      company: header.company,
+      location: header.location || findLegacyLocation(),
+      jobId: findModernDescriptionSection()?.id?.match(/(\d+)$/)?.[1] || currentJobId() || null,
       descriptionText: descEl ? descEl.innerText.trim() : '',
     }
   }
@@ -108,10 +171,12 @@
   // Injected once so the CSS Custom Highlight API (if supported) can paint
   // matches without touching the page's own DOM/React tree.
   const HIGHLIGHT_NAME = 'job-scanner-highlight'
+  let highlightStyle = null
   if (window.CSS?.highlights) {
     const style = document.createElement('style')
     style.textContent = `::highlight(${HIGHLIGHT_NAME}) { background-color: #fde047; color: #111; }`
     document.head.appendChild(style)
+    highlightStyle = style
   }
 
   // Collapse rendered whitespace while retaining the DOM offsets for each
@@ -219,16 +284,24 @@
     return true
   }
 
-  let lastSentDescription = null
+  let lastSentData = null
+
+  function reportJobData(data) {
+    try {
+      chrome.runtime.sendMessage(data).catch(() => {})
+    } catch {
+      // Reloading the extension can invalidate an already-open page's runtime.
+      // A synchronous send failure must not escape the DOM observer/click event.
+    }
+  }
 
   function sendIfChanged() {
+    if (!isJobsPage()) { lastSentData = null; return }
     const data = extractJobData()
-    if (data.descriptionText && data.descriptionText !== lastSentDescription) {
-      lastSentDescription = data.descriptionText
-      chrome.runtime.sendMessage(data).catch(() => {
-        // No listener yet (side panel not open) - fine, it will pull via
-        // REQUEST_JOB_DATA when it opens.
-      })
+    const serialized = JSON.stringify(data)
+    if (serialized !== lastSentData) {
+      lastSentData = serialized
+      reportJobData(data)
     }
   }
 
@@ -237,18 +310,41 @@
     clearTimeout(debounceTimer)
     debounceTimer = setTimeout(sendIfChanged, 600)
   })
-  observer.observe(document.body, { childList: true, subtree: true })
+  observer.observe(document.body, { childList: true, characterData: true, subtree: true })
 
   sendIfChanged()
-  setTimeout(sendIfChanged, 1500)
-  setTimeout(sendIfChanged, 3000)
+  const startupTimers = [setTimeout(sendIfChanged, 1500), setTimeout(sendIfChanged, 3000)]
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  // Observe the user's Apply click before LinkedIn opens an external page or
+  // Easy Apply dialog. This records intent, not a completed application.
+  function handleApplyClick(event) {
+    if (!event.isTrusted || !isJobsPage()) return
+    const control = event.target?.closest?.('button, a, [role="button"]')
+    if (!control) return
+    const label = (control.getAttribute('aria-label') || control.textContent || '').replace(/\s+/g, ' ').trim()
+    if (!/^(?:easy\s+)?apply(?:\s+(?:now\b|to\b|for\b|on company website\b).*)?$/i.test(label)) return
+    const data = extractJobData()
+    if (data.descriptionText) {
+      reportJobData({ ...data, type: 'JOB_APPLY_CLICKED' })
+    }
+  }
+  document.addEventListener('click', handleApplyClick, true)
+
+  function handleMessage(message, _sender, sendResponse) {
     if (message?.type === 'REQUEST_JOB_DATA') {
       sendResponse(extractJobData())
     } else if (message?.type === 'SCROLL_TO_TEXT') {
       scrollToText(message.text).then((found) => sendResponse({ found }))
       return true // keep the message channel open for the async response
     }
-  })
+  }
+  chrome.runtime.onMessage.addListener(handleMessage)
+  globalThis.__jobScannerDispose = () => {
+    observer.disconnect()
+    clearTimeout(debounceTimer)
+    for (const timer of startupTimers) clearTimeout(timer)
+    document.removeEventListener('click', handleApplyClick, true)
+    try { chrome.runtime.onMessage.removeListener(handleMessage) } catch { /* Old runtime may be invalidated. */ }
+    highlightStyle?.remove()
+  }
 })()

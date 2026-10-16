@@ -5,10 +5,13 @@ import MatchResults from './components/MatchResults'
 import JobFields from './components/JobFields'
 import ResumeTabs from './components/ResumeTabs'
 import ReorderableSection from './components/ReorderableSection'
+import CaptureSettings from './components/CaptureSettings'
+import CaptureSaveNotice from './components/CaptureSaveNotice'
 import { extractTextFromPdf } from './lib/extractText'
 import { matchKeywords } from './lib/keywordMatch'
 import { analyzeJobFields } from './lib/jobFields'
 import { subscribeToActiveJob } from './lib/activeJob'
+import { useCaptureState } from './lib/useCaptureState'
 import { RESUME_SLOTS, DEFAULT_SECTION_ORDER, getPanelState, setResume as saveResume, clearResume, setSectionOrder as saveSectionOrder } from './lib/storage'
 import './App.css'
 
@@ -33,6 +36,8 @@ function App() {
   const [isLinkedInJobPage, setIsLinkedInJobPage] = useState(false)
   const [jobData, setJobData] = useState(null)
   const [toast, setToast] = useState(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const captureState = useCaptureState()
 
   useEffect(() => {
     let cancelled = false
@@ -162,7 +167,20 @@ function App() {
     <div className="app">
       <header>
         <h1>Job Scanner</h1>
+        <button type="button" className="settings-button" aria-label="Job Scanner settings"
+          aria-haspopup="dialog" aria-expanded={settingsOpen} aria-controls="capture-settings"
+          onClick={() => setSettingsOpen((open) => !open)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="m9 3-.6 2.5-2.2 1.3L3.7 6 2 9l1.9 1.7v2.6L2 15l1.7 3 2.5-.8 2.2 1.3L9 21h6l.6-2.5 2.2-1.3 2.5.8 1.7-3-1.9-1.7v-2.6L22 9l-1.7-3-2.5.8-2.2-1.3L15 3Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Settings
+        </button>
       </header>
+
+      <CaptureSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} captureState={captureState} />
+
+      <CaptureSaveNotice captureState={captureState} onOpenSettings={() => setSettingsOpen(true)} />
 
       <ResumeTabs
         resumes={resumes}
@@ -201,7 +219,7 @@ function App() {
         <a href={chrome.runtime.getURL('privacy.html')} target="_blank" rel="noreferrer">
           Privacy policy
         </a>
-        <p>Independent tool. Not affiliated with LinkedIn.</p>
+        <p>Independent tool. Not affiliated with LinkedIn. {chrome.runtime.getManifest && `v${chrome.runtime.getManifest().version}`}</p>
       </footer>
 
       {toast && <div className="toast">{toast}</div>}

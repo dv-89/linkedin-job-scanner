@@ -2,6 +2,30 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { analyzeJobFields } from '../panel/src/lib/jobFields.js'
 
+test('clearance requirements are distinguished from optional and ambiguous mentions', () => {
+  for (const sentence of [
+    'An active security clearance is required.',
+    'Candidates must obtain TS/SCI clearance.',
+    'Ability to obtain a security clearance.',
+    'Must pass a public trust investigation.',
+    'Active TS/SCI with polygraph.',
+  ]) assert.equal(analyzeJobFields(sentence).clearance.status, 'Required', sentence)
+  assert.equal(analyzeJobFields('Security clearance is not required.').clearance.status, 'Not required')
+  assert.equal(analyzeJobFields('No security clearance required.').clearance.status, 'Not required')
+  assert.equal(analyzeJobFields('No clearance is required.').clearance.status, 'Not required')
+  assert.equal(analyzeJobFields('Security clearance not mandatory.').clearance.status, 'Not required')
+  assert.equal(analyzeJobFields('Security clearance preferred.').clearance.status, 'Preferred / optional')
+  assert.equal(analyzeJobFields('Discuss security clearance with the recruiter.').clearance.status, 'Mentioned — check manually')
+  assert.equal(analyzeJobFields('Python required.').clearance.status, 'Not mentioned')
+})
+
+test('a required clearance takes precedence over an earlier optional or negative mention', () => {
+  const sentence = 'Candidates must hold a Secret security clearance.'
+  const result = analyzeJobFields(`Top Secret clearance preferred.\n${sentence}`).clearance
+  assert.equal(result.status, 'Required')
+  assert.equal(result.evidence, sentence)
+})
+
 test('unrelated negation does not reverse an offer of sponsorship', () => {
   const sentence = 'We can sponsor visas for candidates who do not currently have work authorization.'
   const result = analyzeJobFields(sentence).sponsorship
@@ -47,4 +71,17 @@ test('inline preference and regex ordering do not replace required experience', 
   assert.equal(analyzeJobFields('5 years of experience.\n2-3 years of experience.').expectedYOE.status, '5+ years')
   assert.equal(analyzeJobFields('3-5 years of experience required.').expectedYOE.status, '3–5 years')
   assert.equal(analyzeJobFields('Python experience required.').expectedYOE.status, 'Not mentioned')
+})
+
+test('one eligibility sentence matching multiple rules appears only once', () => {
+  const sentence = 'Applicants must be a U.S. citizen, a green card holder or a permanent resident.'
+  assert.deepEqual(analyzeJobFields(sentence).preferred.citizenshipNotes, [sentence])
+})
+
+test('distinct eligibility notes remain visible and irrelevant text adds none', () => {
+  const citizenship = 'Applicants must be a U.S. citizen or permanent resident.'
+  const authorization = 'Applicants must be authorized to work without sponsorship.'
+  assert.deepEqual(analyzeJobFields(`${citizenship}\n${authorization}`).preferred.citizenshipNotes,
+    [citizenship, authorization])
+  assert.deepEqual(analyzeJobFields('Python and SQL preferred.').preferred.citizenshipNotes, [])
 })

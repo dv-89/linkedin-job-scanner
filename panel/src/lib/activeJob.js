@@ -1,3 +1,5 @@
+import { requestJobData } from './jobConnection.js'
+
 const LINKEDIN_JOB_URL = /^https:\/\/www\.linkedin\.com\/jobs\//
 
 // Own the tab listeners together so pending requests can be invalidated on
@@ -33,14 +35,12 @@ export function subscribeToActiveJob(chromeApi, onChange) {
     activeUrl = tab.url
 
     try {
-      const response = await chromeApi.tabs.sendMessage(tab.id, {
-        type: 'REQUEST_JOB_DATA',
-      })
+      const response = await requestJobData(chromeApi, tab, () => !disposed && requestRevision === revision)
       if (!disposed && requestRevision === revision && response?.url === tab.url) {
         onChange({ isLinkedInJobPage: true, jobData: response })
       }
     } catch {
-      // A newly loaded tab may not have its content script yet.
+      // Navigation, tab closure or denied host access can cancel reconnection.
     }
   }
 

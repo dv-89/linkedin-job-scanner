@@ -7,8 +7,13 @@ New-Item -ItemType Directory -Path $releaseDir, $stagingDir -Force | Out-Null
 
 # An explicit allowlist keeps source, dependencies, Git files, and demo data
 # out of the uploaded extension. The manifest must be at the ZIP root.
-foreach ($file in @('manifest.json', 'background.js', 'content.js', 'THIRD-PARTY-NOTICES.txt')) {
+foreach ($file in @('manifest.json', 'background.js', 'captureBackground.js', 'content.js', 'THIRD-PARTY-NOTICES.txt')) {
   Copy-Item -LiteralPath (Join-Path $repoRoot $file) -Destination $stagingDir
+}
+$sharedDir = Join-Path $stagingDir 'panel/src/lib'
+New-Item -ItemType Directory -Path $sharedDir -Force | Out-Null
+foreach ($file in @('storage.js', 'jobCapture.js', 'captureCsv.js', 'captureFile.js', 'dailyCapture.js', 'jobConnection.js', 'jobFields.js', 'keywordMatch.js', 'skillsDictionary.js', 'stopwords.js')) {
+  Copy-Item -LiteralPath (Join-Path $repoRoot "panel/src/lib/$file") -Destination $sharedDir
 }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/privacy.html') -Destination (Join-Path $stagingDir 'privacy.html')
 $iconDir = Join-Path $stagingDir 'icons'

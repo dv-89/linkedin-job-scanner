@@ -2,7 +2,7 @@
 
 ## Prepared files
 
-- Upload ZIP: releases/linkedin-job-scanner-0.1.1.zip (generated; not committed).
+- Upload ZIP: releases/linkedin-job-scanner-0.1.10.zip (generated; not committed).
 - Extension and store icon: icons/icon-128.png.
 - Small promotional tile: store/promo-440x280.png.
 - Listing copy, purpose, permission explanations, privacy facts, and test instructions: store/LISTING.md.

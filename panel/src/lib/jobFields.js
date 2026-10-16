@@ -25,20 +25,33 @@ const CLEARANCE_PATTERNS = [
   /\bts\/sci\b/i,
   /\bpublic trust\b/i,
   /\bsecret clearance\b/i,
-  /clearance (required|preferred|eligible|eligibility)/i,
+  /clearance\s+(?:(?:is|not)\s+)*(required|preferred|eligible|eligibility|needed|mandatory|optional)/i,
   /able to obtain (a |an )?(security )?clearance/i,
   /active clearance/i,
   /\bpolygraph\b/i,
 ]
 
 function detectClearance(sentences) {
-  for (const pattern of CLEARANCE_PATTERNS) {
-    const sentence = findSentence(sentences, pattern)
-    if (sentence) {
-      const searchTerm = sentence.match(pattern)?.[0] ?? sentence
-      return { status: 'Mentioned', evidence: sentence, searchTerm }
+  const matches = []
+  for (const sentence of sentences) {
+    const pattern = CLEARANCE_PATTERNS.find((candidate) => candidate.test(sentence))
+    if (!pattern) continue
+    let status = 'Mentioned — check manually'
+    if (/\b(?:no|without)\s+(?:active\s+|security\s+|secret\s+)*clearance\s+(?:is\s+)?(?:required|needed|necessary|mandatory)\b|\bclearance\s+(?:is\s+)?not\s+(?:required|needed|necessary|mandatory)\b|\bnot required to (?:have|hold|obtain)\b/i.test(sentence)) {
+      status = 'Not required'
+    } else if (/\b(?:preferred|optional|desired|nice to have|a plus|not mandatory)\b/i.test(sentence) &&
+        !/\b(?:must|required|mandatory|shall)\b/i.test(sentence)) {
+      status = 'Preferred / optional'
+    } else if (/\b(?:must|required|requires?|mandatory|shall|need to|condition of employment)\b/i.test(sentence) ||
+        /\b(?:ability|able|eligible|eligibility) to (?:obtain|maintain)\b/i.test(sentence) ||
+        /\bactive\s+(?:(?:security\s+|secret\s+|top secret\s+)?clearance|ts\/sci|top secret)\b/i.test(sentence)) {
+      status = 'Required'
     }
+    matches.push({ status, evidence: sentence, searchTerm: sentence.match(pattern)?.[0] ?? sentence })
   }
+  const priority = ['Required', 'Mentioned — check manually', 'Preferred / optional', 'Not required']
+  matches.sort((a, b) => priority.indexOf(a.status) - priority.indexOf(b.status))
+  if (matches.length) return matches[0]
   return { status: 'Not mentioned', evidence: null, searchTerm: null }
 }
 
@@ -144,9 +157,10 @@ function detectPreferred(text, sentences) {
     searchTerm = headingMatch[0].trim()
   }
 
-  const citizenshipNotes = CITIZENSHIP_PATTERNS.map((pattern) =>
+  // One source sentence can match several eligibility rules; display it once.
+  const citizenshipNotes = [...new Set(CITIZENSHIP_PATTERNS.map((pattern) =>
     findSentence(sentences, pattern)
-  ).filter(Boolean)
+  ).filter(Boolean))]
 
   return { status, evidence, searchTerm, citizenshipNotes }
 }
